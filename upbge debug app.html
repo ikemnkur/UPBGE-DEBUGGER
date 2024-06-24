@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPBGE DEBUG Viewer</title>
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>UPBGE DEBUG Viewer</title>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@900&display=swap');
+
+            body {
+                font-family: 'Arial', sans-serif;
+                background-color: #dbdbdb;
+                color: #181818;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+                padding: 20px;
+            }
+
+            h1,
+            h2 {
+                color: #FF8C00;
+                text-align: center;
+                margin-top: 0;
+            }
+
+            .container {
+                display: flex;
+                background-color: white;
+                border-radius: 10px;
+                box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+                width: 90%;
+                max-width: 1200px;
+                margin-bottom: 20px;
+            }
+
+            .column {
+                display: flex;
+                flex-direction: column;
+                width: 50%;
+                padding: 20px;
+            }
+
+            .column:first-child {
+                border-right: 1px solid #e0e0e0;
+            }
+
+            .logo-container {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 20px;
+                margin-top: 50px;
+            }
+
+            .logo-container img {
+                width: 50px;
+                height: auto;
+                margin-right: 10px;
+            }
+
+            .logo-text {
+                font-family: 'Roboto', sans-serif;
+                font-weight: 900;
+                font-size: 2.5rem;
+                color: #ffffff;
+            }
+
+            #objectList {
+                height: 400px;
+                overflow-y: auto;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
+                margin-top: 10px;
+            }
+
+            #objectProperties {
+                height: 350px;
+                overflow-y: auto;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
+                margin-bottom: 10px;
+            }
+
+            .object {
+                padding: 10px;
+                cursor: pointer;
+                transition: background-color 0.3s;
+            }
+
+            .object:nth-child(even) {
+                background-color: #f9f9f9;
+            }
+
+            .object:hover {
+                background-color: #FFA500;
+                color: white;
+            }
+
+            .object.selected {
+                background-color: #FF8C00;
+                color: white;
+            }
+
+            .search-container {
+                margin-bottom: 10px;
+            }
+
+            #searchObject {
+                width: 96%;
+                padding: 5px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                margin: auto;
+            }
+
+            button {
+                background-color: #FF8C00;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                margin-top: 5px;
+                border-radius: 5px;
+                cursor: pointer;
+                transition: background-color 0.3s;
+            }
+
+            button:hover {
+                background-color: #FFA500;
+            }
+
+            #consoleOutput {
+                width: 90%;
+                max-width: 1200px;
+                height: 200px;
+                overflow-y: auto;
+                background-color: #333;
+                color: #fff;
+                padding: 10px;
+                border-radius: 5px;
+                font-family: monospace;
+            }
+        </style>
+    </head>
+
+<body>
+    <h1>UPBGE DEBUG Viewer</h1>
+    <div class="container">
+        <div class="column">
+            <h2>Objects</h2>
+            <div class="search-container">
+                <input type="text" id="searchObject" placeholder="Search objects...">
+            </div>
+            <div id="objectList">
+                <!-- Object list will be populated here -->
+            </div>
+        </div>
+        <div class="column">
+            <h2>Object Properties</h2>
+            <div id="objectProperties">
+                <!-- Object properties will be displayed here -->
+            </div>
+            <button id="toggleVisibility">Show/Hide</button>
+            <button id="deleteObject">Delete</button>
+        </div>
+    </div>
+
+    <div id="consoleOutput">
+        <p>Console output will appear here</p>
+    </div>
+
+    
+    <div class="logo-container">
+        <img src="https://upbge.org/bd29f318f4a30e8c951e.svg" alt="UPBGE Logo">
+        <div class="logo-text">UPBGE</div>
+    </div>
+
+
+
+    <script>
+        console.log("Script started");
+        const objectList = document.getElementById('objectList');
+        const objectProperties = document.getElementById('objectProperties');
+        let selectedObject = null;
+        let socket;
+        const reconnectInterval = 5000; // 5 seconds
+        let lastErrorMessage = '';
+
+        function connectWebSocket() {
+            console.log("Attempting to connect to WebSocket");
+            const port = prompt("Enter the WebSocket server port:", "8765");
+
+            if (!port) {
+                console.log("User cancelled port input");
+                return; // Exit if user cancels
+            }
+
+            console.log("Connecting to WebSocket on port:", port);
+            socket = new WebSocket(`ws://localhost:${port}`);
+
+            socket.onopen = function (e) {
+                console.log("Connected to WebSocket server");
+                socket.send(JSON.stringify({ type: 'get_objects' }));
+            };
+
+            socket.onmessage = function (event) {
+                const message = JSON.parse(event.data);
+                console.log("Received message:", message.type);
+                if (message.type === 'objects') {
+                    updateObjectList(message.data);
+                } else if (message.type === 'object_properties') {
+                    displayObjectProperties(message.data);
+                } else if (message.type === 'error') {
+                    if (message.message !== lastErrorMessage) {
+                        console.error('Server error:', message.message);
+                        alert('Error: ' + message.message);
+                        lastErrorMessage = message.message;
+                    }
+                }
+            };
+
+            socket.onclose = function (event) {
+                console.log('WebSocket connection closed. Reconnecting...');
+                setTimeout(connectWebSocket, reconnectInterval);
+            };
+
+            socket.onerror = function (error) {
+                console.error(`WebSocket Error:`, error);
+            };
+        }
+
+        function updateObjectList(objects) {
+            objectList.innerHTML = objects.map(obj =>
+                `<div class="object ${obj.name === selectedObject ? 'selected' : ''}" data-name="${obj.name}">${obj.name}</div>`
+            ).join('');
+        }
+
+        function displayObjectProperties(properties) {
+            let html = `<h3>${selectedObject} Properties</h3>`;
+
+            // Basic Properties
+            html += '<div class="property-section"><h4>Basic Properties</h4>';
+            for (let [key, value] of Object.entries(properties.basic)) {
+                html += `
+            <div class="property">
+                <span>${key}: </span>
+                <span class="editable" data-property="${key}">${JSON.stringify(value)}</span>
+            </div>`;
+            }
+            html += '</div>';
+
+            // Physics Properties
+            if (Object.keys(properties.physics).length > 0) {
+                html += '<div class="property-section"><h4>Physics Properties</h4>';
+                for (let [key, value] of Object.entries(properties.physics)) {
+                    html += `
+                <div class="property">
+                    <span>${key}: </span>
+                    <span class="editable" data-property="${key}">${JSON.stringify(value)}</span>
+                </div>`;
+                }
+                html += '</div>';
+            }
+
+            // Materials
+            if (properties.materials.length > 0) {
+                html += '<div class="property-section"><h4>Materials</h4>';
+                for (let material of properties.materials) {
+                    html += `<div class="property">${material}</div>`;
+                }
+                html += '</div>';
+            }
+
+            // Game Properties
+            if (Object.keys(properties.game).length > 0) {
+                html += '<div class="property-section"><h4>Game Properties</h4>';
+                for (let [key, value] of Object.entries(properties.game)) {
+                    html += `
+                <div class="property">
+                    <span>${key}: </span>
+                    <span class="editable" data-property="${key}">${value}</span>
+                </div>`;
+                }
+                html += '</div>';
+            }
+
+            objectProperties.innerHTML = html;
+        }
+
+        function makeEditable(element) {
+            const property = element.dataset.property;
+            const value = element.textContent;
+            element.innerHTML = `<input type="text" value='${value}'>`;
+            element.classList.add('editing');
+            const input = element.querySelector('input');
+            input.focus();
+            input.addEventListener('blur', () => saveEdit(element, property, input.value));
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    saveEdit(element, property, input.value);
+                }
+            });
+        }
+
+        function saveEdit(element, property, newValue) {
+            socket.send(JSON.stringify({
+                type: 'update_object_property',
+                object: selectedObject,
+                property: property,
+                value: JSON.parse(newValue)
+            }));
+            element.textContent = newValue;
+            element.classList.remove('editing');
+        }
+
+        objectList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('object')) {
+                document.querySelectorAll('.object').forEach(obj => obj.classList.remove('selected'));
+                e.target.classList.add('selected');
+                selectedObject = e.target.dataset.name;
+                socket.send(JSON.stringify({
+                    type: 'get_object_properties',
+                    name: selectedObject
+                }));
+            }
+        });
+
+        objectProperties.addEventListener('click', (e) => {
+            if (e.target.classList.contains('editable') && !e.target.classList.contains('editing')) {
+                makeEditable(e.target);
+            }
+        });
+
+        // New functions for search, show/hide, and delete
+        function searchObjects() {
+            const searchTerm = document.getElementById('searchObject').value.toLowerCase();
+            const objects = document.querySelectorAll('.object');
+            objects.forEach(obj => {
+                const objectName = obj.textContent.toLowerCase();
+                obj.style.display = objectName.includes(searchTerm) ? '' : 'none';
+            });
+        }
+
+        function toggleVisibility() {
+            if (selectedObject) {
+                // Implement logic to show/hide the selected object in Blender
+                console.log(`Toggle visibility for ${selectedObject}`);
+                // You'll need to send a message to the WebSocket server to perform this action in Blender
+            } else {
+                alert('Please select an object first');
+            }
+        }
+
+        function deleteObject() {
+            if (selectedObject) {
+                // Implement logic to delete the selected object in Blender
+                console.log(`Delete object ${selectedObject}`);
+                // You'll need to send a message to the WebSocket server to perform this action in Blender
+            } else {
+                alert('Please select an object first');
+            }
+        }
+
+        // Event listeners
+        document.getElementById('searchObject').addEventListener('input', searchObjects);
+        document.getElementById('toggleVisibility').addEventListener('click', toggleVisibility);
+        document.getElementById('deleteObject').addEventListener('click', deleteObject);
+
+        // Function to add console output
+        function addConsoleOutput(message) {
+            const consoleOutput = document.getElementById('consoleOutput');
+            const p = document.createElement('p');
+            p.textContent = message;
+            consoleOutput.appendChild(p);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        // Initial connection
+        console.log("Starting initial connection");
+        connectWebSocket();
+    </script>
+</body>
+
+</html>
