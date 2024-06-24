@@ -9,7 +9,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>UPBGE DEBUG Viewer</title>
+        <title>UPBGE DEBUGGER</title>
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@900&display=swap');
 
@@ -46,7 +46,14 @@
             .column {
                 display: flex;
                 flex-direction: column;
-                width: 50%;
+                width: 70%;
+                padding: 20px;
+            }
+
+            .column1 {
+                display: flex;
+                flex-direction: column;
+                width: 30%;
                 padding: 20px;
             }
 
@@ -149,23 +156,64 @@
                 border-radius: 5px;
                 font-family: monospace;
             }
+
+            ul {
+                list-style-type: none;
+                margin-bottom: 5;
+                padding: 0;
+                overflow: hidden;
+                background-color: #333;
+                /* position: fixed; */
+                /* top: 0; */
+                width: 100%;
+                border-radius: 10px;
+            }
+
+            li {
+                float: left;
+            }
+
+            li a {
+                display: block;
+                color: white;
+                text-align: center;
+                padding: 14px 16px;
+                text-decoration: none;
+                
+            }
+
+            li a:hover:not(.active) {
+                background-color: #111;
+            }
+
+            .active {
+                background-color: #e9bc5c;
+            }
         </style>
     </head>
 
 <body>
-    <h1>UPBGE DEBUG Viewer</h1>
+    <h1>UPBGE DEBUGGER</h1>
     <div class="container">
-        <div class="column">
+        <div class="column1" style="background-color: rgba(226, 226, 226, 0.727);">
             <h2>Objects</h2>
             <div class="search-container">
                 <input type="text" id="searchObject" placeholder="Search objects...">
             </div>
-            <div id="objectList">
+            <div id="objectList" style="background-color: rgb(255, 255, 255);">
                 <!-- Object list will be populated here -->
             </div>
         </div>
-        <div class="column">
-            <h2>Object Properties</h2>
+        <div class="column" style="background-color: rgba(255, 255, 255, 0.768);">
+            <ul>
+                <li><a class="active">Properties</a></li>
+                <li><a >Logic</a></li>
+                <li><a >Physics</a></li>
+                <li><a >Materials</a></li>
+                <li><a >Miscellanous</a></li>
+            </ul>
+
+            <!-- <h2>Object Properties</h2> -->
             <div id="objectProperties">
                 <!-- Object properties will be displayed here -->
             </div>
@@ -178,10 +226,17 @@
         <p>Console output will appear here</p>
     </div>
 
-    
+
     <div class="logo-container">
         <img src="https://upbge.org/bd29f318f4a30e8c951e.svg" alt="UPBGE Logo">
         <div class="logo-text">UPBGE</div>
+    </div>
+
+    <div>
+        GitHub Repo Link: 
+        <a>
+            https://github.com/ikemnkur/UPBGE-DEBUGGER
+        </a>
     </div>
 
 
