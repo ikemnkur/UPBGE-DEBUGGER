@@ -189,6 +189,39 @@
             .active {
                 background-color: #e9bc5c;
             }
+
+            .property-section {
+    margin-bottom: 20px;
+}
+
+.property {
+    background-color: #f5f5f5;
+    padding: 10px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+}
+
+.property span:first-child {
+    text-transform: uppercase;
+    font-weight: bold;
+    margin-right: 10px;
+    display: inline-block;
+    /* width: 120px; */
+}
+
+.editable {
+    display: inline-block;
+    min-width: 60px;
+    padding: 2px 5px;
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+}
+
+.editing input {
+    width: 100%;
+    box-sizing: border-box;
+}
         </style>
     </head>
 
@@ -300,54 +333,82 @@
         }
 
         function displayObjectProperties(properties) {
-            let html = `<h3>${selectedObject} Properties</h3>`;
-
+            let html = `<h3 style=" text-align: center;">${selectedObject} Properties</h3>`;
+            
             // Basic Properties
             html += '<div class="property-section"><h4>Basic Properties</h4>';
             for (let [key, value] of Object.entries(properties.basic)) {
                 html += `
-            <div class="property">
-                <span>${key}: </span>
-                <span class="editable" data-property="${key}">${JSON.stringify(value)}</span>
-            </div>`;
+                <div class="property">
+                    <span>${key}:</span>
+                    <span style="float: right;"> 
+                        X: <span class="editable" data-property="${key}X">${value.x}</span>
+                        Y: <span class="editable" data-property="${key}Y">${value.y}</span>
+                        Z: <span class="editable" data-property="${key}Z">${value.z}</span>
+                    </span>
+                </div>`;
             }
             html += '</div>';
-
+            
             // Physics Properties
             if (Object.keys(properties.physics).length > 0) {
                 html += '<div class="property-section"><h4>Physics Properties</h4>';
                 for (let [key, value] of Object.entries(properties.physics)) {
-                    html += `
-                <div class="property">
-                    <span>${key}: </span>
-                    <span class="editable" data-property="${key}">${JSON.stringify(value)}</span>
-                </div>`;
+                    if (typeof value === 'object' && value !== null) {
+                        html += `
+                        <div class="property">
+                            <span>${key}:</span>
+                            <span style="float: right;">
+                                X: <span class="editable" data-property="${key}X">${value.x}</span>
+                                Y: <span class="editable" data-property="${key}Y">${value.y}</span>
+                                Z: <span class="editable" data-property="${key}Z">${value.z}</span>
+                            </span>
+                        </div>`;
+                    } else {
+                        html += `
+                        <div class="property">
+                            <span>${key}:</span>
+                            <span style="float: right;" class="editable" data-property="${key}">${value}</span>
+                        </div>`;
+                    }
                 }
                 html += '</div>';
             }
-
+            
             // Materials
             if (properties.materials.length > 0) {
                 html += '<div class="property-section"><h4>Materials</h4>';
                 for (let material of properties.materials) {
-                    html += `<div class="property">${material}</div>`;
+                    html += `<div class="property"><span>MATERIAL:</span>${material}</div>`;
                 }
                 html += '</div>';
             }
-
+            
             // Game Properties
             if (Object.keys(properties.game).length > 0) {
                 html += '<div class="property-section"><h4>Game Properties</h4>';
                 for (let [key, value] of Object.entries(properties.game)) {
-                    html += `
-                <div class="property">
-                    <span>${key}: </span>
-                    <span class="editable" data-property="${key}">${value}</span>
-                </div>`;
+                    if (typeof value === 'object' && value !== null) {
+                        html += `
+                        <div class="property">
+                            <span>${key}:</span>
+                            <span style="float: right;">
+                            X: <span class="editable" data-property="${key}X">${value.x}</span>
+                            Y: <span class="editable" data-property="${key}Y">${value.y}</span>
+                            Z: <span class="editable" data-property="${key}Z">${value.z}</span>
+                            </span>
+                        </div>`;
+                    } else {
+                        html += `
+                        <div class="property">
+                            <span>${key}:</span>
+                            <span style="float: right;" class="editable" data-property="${key}">${value}</span>
+                        </div>`;
+                    }
                 }
                 html += '</div>';
             }
-
+            
             objectProperties.innerHTML = html;
         }
 
