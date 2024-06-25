@@ -4,6 +4,7 @@ import threading
 import bge
 import socket
 import json
+import mathutils    
 
 clients = set()
 selected_object = None
@@ -12,7 +13,7 @@ reported_errors = set()  # To keep track of reported errors
 def truncate(value, digits=3):
     if isinstance(value, float):
         return round(value, digits)
-    elif isinstance(value, list):
+    elif isinstance(value, (list, mathutils.Vector, mathutils.Euler)):
         return [truncate(v, digits) for v in value]
     return value
 
@@ -77,26 +78,54 @@ async def send_object_properties(websocket, object_name):
         try:
             properties = {
                 "basic": {
-                    "position": truncate(list(obj.worldPosition)),
-                    "rotation": truncate(list(obj.worldOrientation.to_euler())),
-                    "scale": truncate(list(obj.worldScale))
+                    "position": {
+                        "x": truncate(obj.worldPosition.x),
+                        "y": truncate(obj.worldPosition.y),
+                        "z": truncate(obj.worldPosition.z)
+                    },
+                    "rotation": {
+                        "x": truncate(obj.worldOrientation.to_euler().x),
+                        "y": truncate(obj.worldOrientation.to_euler().y),
+                        "z": truncate(obj.worldOrientation.to_euler().z)
+                    },
+                    "scale": {
+                        "x": truncate(obj.worldScale.x),
+                        "y": truncate(obj.worldScale.y),
+                        "z": truncate(obj.worldScale.z)
+                    }
                 },
-                "game": {},
                 "physics": {},
+                "game": {},
                 "materials": []
             }
-            
-            # Game properties
-            for key in obj.getPropertyNames():
-                properties["game"][key] = truncate(obj[key])
             
             # Physics properties (only if the object has physics)
             if hasattr(obj, 'mass'):
                 properties["physics"]["mass"] = truncate(obj.mass)
                 if hasattr(obj, 'linearVelocity'):
-                    properties["physics"]["linearVelocity"] = truncate(list(obj.linearVelocity))
+                    properties["physics"]["linearVelocity"] = {
+                        "x": truncate(obj.linearVelocity.x),
+                        "y": truncate(obj.linearVelocity.y),
+                        "z": truncate(obj.linearVelocity.z)
+                    }
                 if hasattr(obj, 'angularVelocity'):
-                    properties["physics"]["angularVelocity"] = truncate(list(obj.angularVelocity))
+                    properties["physics"]["angularVelocity"] = {
+                        "x": truncate(obj.angularVelocity.x),
+                        "y": truncate(obj.angularVelocity.y),
+                        "z": truncate(obj.angularVelocity.z)
+                    }
+            
+            # Game properties
+            for key in obj.getPropertyNames():
+                value = obj[key]
+                if isinstance(value, (int, float, bool, str)):
+                    properties["game"][key] = truncate(value)
+                elif isinstance(value, (mathutils.Vector, mathutils.Euler)):
+                    properties["game"][key] = {
+                        "x": truncate(value.x),
+                        "y": truncate(value.y),
+                        "z": truncate(value.z)
+                    }
             
             # Materials (if the object has a mesh)
             if hasattr(obj, 'meshes') and obj.meshes:
@@ -105,10 +134,8 @@ async def send_object_properties(websocket, object_name):
             await websocket.send(json.dumps({"type": "object_properties", "data": properties}))
         except Exception as e:
             error_msg = f"Error processing object {object_name}: {str(e)}"
-            if error_msg not in reported_errors:
-                print(error_msg)
-                reported_errors.add(error_msg)
-                await websocket.send(json.dumps({"type": "error", "message": error_msg}))
+            print(error_msg)
+            await websocket.send(json.dumps({"type": "error", "message": error_msg}))
     else:
         await websocket.send(json.dumps({"type": "error", "message": f"Object '{object_name}' not found"}))
 
