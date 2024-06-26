@@ -4,11 +4,14 @@ import threading
 import bge
 import socket
 import json
+import math
 import mathutils    
 
 clients = set()
 selected_object = None
 reported_errors = set()  # To keep track of reported errors
+mouse_visible = True
+
 
 def truncate(value, digits=3):
     if isinstance(value, float):
@@ -59,13 +62,83 @@ async def handle_client(websocket, path):
                 await send_object_properties(websocket, data['name'])
             elif data['type'] == 'update_object_property':
                 await update_object_property(websocket, data)
+            elif data['type'] == 'toggle_visibility':
+                await toggle_object_visibility(websocket, data['object'])
+            elif data['type'] == 'get_game_info':
+                await send_game_info(websocket)
+            elif data['type'] == 'set_game_speed':
+                await set_game_speed(websocket, data['speed'])
+            elif data['type'] == 'toggle_physics_debug':
+                await toggle_physics_debug(websocket)
+            elif data['type'] == 'toggle_mouse':
+                await toggle_mouse(websocket)
+            elif data['type'] == 'restart_game':
+                await restart_game(websocket)
+            elif data['type'] == 'end_game':
+                await end_game(websocket)
     except websockets.exceptions.ConnectionClosedError:
         print("Client connection closed")
-    except Exception as e:
-        print(f"Error handling client: {str(e)}")
     finally:
         clients.remove(websocket)
 
+
+async def toggle_object_visibility(websocket, object_name):
+    scene = bge.logic.getCurrentScene()
+    obj = scene.objects.get(object_name)
+    if obj:
+        obj.visible = not obj.visible
+        await websocket.send(json.dumps({"type": "visibility_updated", "object": object_name, "visible": obj.visible}))
+    else:
+        await websocket.send(json.dumps({"type": "error", "message": f"Object '{object_name}' not found"}))
+
+# async def send_game_info(websocket):
+#     info = {
+#         "fps": bge.logic.getAverageFrameRate(),
+#         "game_speed": bge.logic.getTimeScale(),
+#         "physics_debug": bge.logic.getCurrentScene().debugDraw,
+#         "mouse_visible": bge.logic.getCurrentScene().mouseCursor,
+#     }
+#     await websocket.send(json.dumps({"type": "game_info", "data": info}))
+
+async def set_game_speed(websocket, speed):
+    bge.logic.setTimeScale(float(speed))
+    await websocket.send(json.dumps({"type": "game_speed_updated", "speed": speed}))
+
+async def send_game_info(websocket):
+    global mouse_visible
+    info = {
+        "fps": bge.logic.getAverageFrameRate(),
+        "game_speed": bge.logic.getTimeScale(),
+        "mouse_visible": mouse_visible
+    }
+    await websocket.send(json.dumps({"type": "game_info", "data": info}))
+
+async def toggle_mouse(websocket):
+    global mouse_visible
+    mouse_visible = not mouse_visible
+    bge.render.showMouse(mouse_visible)
+    await websocket.send(json.dumps({"type": "mouse_visibility_updated", "visible": mouse_visible}))
+
+async def toggle_physics_debug(websocket):
+    # UPBGE doesn't have a built-in physics debug visualization
+    # You might need to implement your own visualization method
+    # For now, we'll just send a message that this feature is not available
+    await websocket.send(json.dumps({"type": "error", "message": "Physics debug visualization is not available in this version of UPBGE"}))
+
+# async def toggle_mouse(websocket):
+#     scene = bge.logic.getCurrentScene()
+#     default_object = scene.objects['__default__']
+#     default_object.visible = not default_object.visible
+#     bge.render.showMouse(default_object.visible)
+#     await websocket.send(json.dumps({"type": "mouse_visibility_updated", "visible": default_object.visible}))
+
+async def restart_game(websocket):
+    bge.logic.restartGame()
+    await websocket.send(json.dumps({"type": "game_restarted"}))
+
+async def end_game(websocket):
+    bge.logic.endGame()
+    await websocket.send(json.dumps({"type": "game_ended"}))
 async def send_objects(websocket):
     scene = bge.logic.getCurrentScene()
     objects = [{"name": obj.name} for obj in scene.objects]
@@ -84,9 +157,9 @@ async def send_object_properties(websocket, object_name):
                         "z": truncate(obj.worldPosition.z)
                     },
                     "rotation": {
-                        "x": truncate(obj.worldOrientation.to_euler().x),
-                        "y": truncate(obj.worldOrientation.to_euler().y),
-                        "z": truncate(obj.worldOrientation.to_euler().z)
+                        "x": truncate(math.degrees(obj.worldOrientation.to_euler().x)),
+                        "y": truncate(math.degrees(obj.worldOrientation.to_euler().y)),
+                        "z": truncate(math.degrees(obj.worldOrientation.to_euler().z))
                     },
                     "scale": {
                         "x": truncate(obj.worldScale.x),
@@ -94,25 +167,26 @@ async def send_object_properties(websocket, object_name):
                         "z": truncate(obj.worldScale.z)
                     }
                 },
-                "physics": {},
+                "physics": {"status": "Not applicable"},
                 "game": {},
                 "materials": []
             }
             
             # Physics properties (only if the object has physics)
-            if hasattr(obj, 'mass'):
-                properties["physics"]["mass"] = truncate(obj.mass)
-                if hasattr(obj, 'linearVelocity'):
-                    properties["physics"]["linearVelocity"] = {
-                        "x": truncate(obj.linearVelocity.x),
-                        "y": truncate(obj.linearVelocity.y),
-                        "z": truncate(obj.linearVelocity.z)
-                    }
-                if hasattr(obj, 'angularVelocity'):
-                    properties["physics"]["angularVelocity"] = {
-                        "x": truncate(obj.angularVelocity.x),
-                        "y": truncate(obj.angularVelocity.y),
-                        "z": truncate(obj.angularVelocity.z)
+            if obj.getPhysicsId():
+                if hasattr(obj, 'mass') and hasattr(obj, 'linearVelocity') and hasattr(obj, 'angularVelocity'):
+                    properties["physics"] = {
+                        "mass": truncate(obj.mass),
+                        "linearVelocity": {
+                            "x": truncate(obj.linearVelocity.x),
+                            "y": truncate(obj.linearVelocity.y),
+                            "z": truncate(obj.linearVelocity.z)
+                        },
+                        "angularVelocity": {
+                            "x": truncate(obj.angularVelocity.x),
+                            "y": truncate(obj.angularVelocity.y),
+                            "z": truncate(obj.angularVelocity.z)
+                        }
                     }
             
             # Game properties
@@ -130,6 +204,8 @@ async def send_object_properties(websocket, object_name):
             # Materials (if the object has a mesh)
             if hasattr(obj, 'meshes') and obj.meshes:
                 properties["materials"] = [mat.name for mat in obj.meshes[0].materials]
+            else:
+                properties["materials"] = ["Not applicable"]
             
             await websocket.send(json.dumps({"type": "object_properties", "data": properties}))
         except Exception as e:
@@ -137,7 +213,7 @@ async def send_object_properties(websocket, object_name):
             print(error_msg)
             await websocket.send(json.dumps({"type": "error", "message": error_msg}))
     else:
-        await websocket.send(json.dumps({"type": "error", "message": f"Object '{object_name}' not found"}))
+        await websocket.send(json.dumps({"type": "error", "message": f"Object '{object_name}' not found"})) 
 
 async def update_object_property(websocket, data):
     scene = bge.logic.getCurrentScene()
@@ -146,11 +222,30 @@ async def update_object_property(websocket, data):
         try:
             property_name = data['property']
             new_value = data['value']
-            if isinstance(obj[property_name], (int, float)):
-                new_value = float(new_value)
-            elif isinstance(obj[property_name], bool):
-                new_value = new_value.lower() in ('true', '1', 'yes')
-            obj[property_name] = new_value
+            
+            if property_name == 'position':
+                axis = data.get('axis', 'x')
+                current_position = obj.worldPosition
+                setattr(current_position, axis, float(new_value))
+                obj.worldPosition = current_position
+            elif property_name == 'rotation':
+                axis = data.get('axis', 'x')
+                current_rotation = obj.worldOrientation.to_euler()
+                index = 'xyz'.index(axis)
+                current_rotation[index] = math.radians(float(new_value))
+                obj.worldOrientation = current_rotation.to_matrix()
+            elif property_name == 'scale':
+                axis = data.get('axis', 'x')
+                current_scale = obj.worldScale
+                setattr(current_scale, axis, float(new_value))
+                obj.worldScale = current_scale
+            else:
+                if isinstance(obj[property_name], (int, float)):
+                    new_value = float(new_value)
+                elif isinstance(obj[property_name], bool):
+                    new_value = new_value.lower() in ('true', '1', 'yes')
+                obj[property_name] = new_value
+            
             await websocket.send(json.dumps({"type": "update_success"}))
         except Exception as e:
             await websocket.send(json.dumps({"type": "error", "message": str(e)}))

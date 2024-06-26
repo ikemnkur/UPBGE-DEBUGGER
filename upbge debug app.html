@@ -96,6 +96,7 @@
                 border: 1px solid #e0e0e0;
                 border-radius: 5px;
                 margin-bottom: 10px;
+                padding: 5px;
             }
 
             .object {
@@ -179,7 +180,7 @@
                 text-align: center;
                 padding: 14px 16px;
                 text-decoration: none;
-                
+
             }
 
             li a:hover:not(.active) {
@@ -187,46 +188,114 @@
             }
 
             .active {
-                background-color: #e9bc5c;
+                background-color: #ecb02f;
             }
 
             .property-section {
-    margin-bottom: 20px;
-}
+                margin-bottom: 20px;
+            }
 
-.property {
-    background-color: #f5f5f5;
-    padding: 10px;
-    margin-bottom: 5px;
-    border-radius: 5px;
-}
+            .property {
+                background-color: #f5f5f5;
+                padding: 10px;
+                margin-bottom: 5px;
+                border-radius: 5px;
+            }
 
-.property span:first-child {
-    text-transform: uppercase;
-    font-weight: bold;
-    margin-right: 10px;
-    display: inline-block;
-    /* width: 120px; */
-}
+            .property span:first-child {
+                text-transform: uppercase;
+                font-weight: bold;
+                margin-right: 10px;
+                display: inline-block;
+                /* width: 120px; */
+            }
 
-.editable {
-    display: inline-block;
-    min-width: 60px;
-    padding: 2px 5px;
-    background-color: #ffffff;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-}
+            .editable {
+                display: inline-block;
+                min-width: 60px;
+                padding: 2px 5px;
+                background-color: #ffffff;
+                border: 1px solid #ddd;
+                border-radius: 3px;
+            }
 
-.editing input {
-    width: 100%;
-    box-sizing: border-box;
-}
+            .editing input {
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            #propertiesMenu {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: space-around;
+                padding: 0;
+                list-style-type: none;
+                background-color: #333;
+                border-radius: 10px;
+            }
+
+            #propertiesMenu li {
+                flex-grow: 1;
+                text-align: center;
+            }
+
+            #propertiesMenu li a {
+                display: block;
+                color: white;
+                text-align: center;
+                padding: 14px 16px;
+                text-decoration: none;
+                cursor: pointer;
+            }
+
+            #propertiesMenu li a:hover:not(.active) {
+                background-color: #111;
+            }
+
+            #propertiesMenu .active {
+                background-color: #e9bc5c;
+                color: #333;
+            }
+
+            .error-message {
+                color: #721c24;
+                background-color: #f8d7da;
+                border: 1px solid #f5c6cb;
+                padding: 10px;
+                margin-bottom: 10px;
+                border-radius: 5px;
+            }
+
+            @media (max-width: 600px) {
+                #propertiesMenu li {
+                    flex-basis: 50%;
+                }
+            }
         </style>
     </head>
 
 <body>
     <h1>UPBGE DEBUGGER</h1>
+    <div class="container">
+        
+        <div id="gameControls">
+            Game Speed:
+            <input type="number" id="gameSpeed" min="0" max="2" step="0.1" value="1">
+            <button id="pausePlay">Pause/Play</button>
+            <button id="togglePhysicsDebug">Toggle Physics Debug</button>
+            <button id="toggleMouse">Toggle Mouse</button>
+            <button id="restartGame">Restart Game</button>
+            <button id="endGame">End Game</button>
+        </div>
+        <div id="gameInfo" style="margin: auto; padding: 10;">
+            <p>FPS: <span id="fpsValue"></span></p>
+            
+            <!-- <p>Profile: <span id="profileValue"></span></p> -->
+        </div>
+
+        
+    </div>
+
     <div class="container">
         <div class="column1" style="background-color: rgba(226, 226, 226, 0.727);">
             <h2>Objects</h2>
@@ -237,16 +306,16 @@
                 <!-- Object list will be populated here -->
             </div>
         </div>
+        <!-- Make this menu bar resposive -->
         <div class="column" style="background-color: rgba(255, 255, 255, 0.768);">
-            <ul>
-                <li><a class="active">Properties</a></li>
-                <li><a >Logic</a></li>
-                <li><a >Physics</a></li>
-                <li><a >Materials</a></li>
-                <li><a >Miscellanous</a></li>
+            <ul id="propertiesMenu">
+                <li><a class="active" data-tab="properties">Properties</a></li>
+                <li><a data-tab="logic">Logic</a></li>
+                <li><a data-tab="physics">Physics</a></li>
+                <li><a data-tab="materials">Materials</a></li>
+                <li><a data-tab="misc">Miscellaneous</a></li>
             </ul>
 
-            <!-- <h2>Object Properties</h2> -->
             <div id="objectProperties">
                 <!-- Object properties will be displayed here -->
             </div>
@@ -266,7 +335,7 @@
     </div>
 
     <div>
-        GitHub Repo Link: 
+        GitHub Repo Link:
         <a>
             https://github.com/ikemnkur/UPBGE-DEBUGGER
         </a>
@@ -282,6 +351,9 @@
         let socket;
         const reconnectInterval = 5000; // 5 seconds
         let lastErrorMessage = '';
+        let currentlyEditingProperty = null;
+        let currentTab = 'properties';
+
 
         function connectWebSocket() {
             console.log("Attempting to connect to WebSocket");
@@ -303,16 +375,37 @@
             socket.onmessage = function (event) {
                 const message = JSON.parse(event.data);
                 console.log("Received message:", message.type);
-                if (message.type === 'objects') {
-                    updateObjectList(message.data);
-                } else if (message.type === 'object_properties') {
-                    displayObjectProperties(message.data);
-                } else if (message.type === 'error') {
-                    if (message.message !== lastErrorMessage) {
+                switch (message.type) {
+                    case 'objects':
+                        updateObjectList(message.data);
+                        break;
+                    case 'object_properties':
+                        displayObjectProperties(message.data);
+                        break;
+                    case 'game_info':
+                        updateGameInfo(message.data);
+                        break;
+                    case 'visibility_updated':
+                        console.log(`Object ${message.object} visibility set to ${message.visible}`);
+                        break;
+                    case 'game_speed_updated':
+                        console.log(`Game speed set to ${message.speed}`);
+                        break;
+                    case 'physics_debug_updated':
+                        console.log(`Physics debug ${message.enabled ? 'enabled' : 'disabled'}`);
+                        break;
+                    case 'mouse_visibility_updated':
+                        console.log(`Mouse visibility set to ${message.visible}`);
+                        break;
+                    case 'game_restarted':
+                        console.log('Game restarted');
+                        break;
+                    case 'game_ended':
+                        console.log('Game ended');
+                        break;
+                    case 'error':
                         console.error('Server error:', message.message);
-                        alert('Error: ' + message.message);
-                        lastErrorMessage = message.message;
-                    }
+                        break;
                 }
             };
 
@@ -333,83 +426,133 @@
         }
 
         function displayObjectProperties(properties) {
-            let html = `<h3 style=" text-align: center;">${selectedObject} Properties</h3>`;
-            
-            // Basic Properties
-            html += '<div class="property-section"><h4>Basic Properties</h4>';
-            for (let [key, value] of Object.entries(properties.basic)) {
+            let html = "";
+            // let html = `<h3>${selectedObject} Properties</h3>`;
+            switch (currentTab) {
+                case 'properties':
+                    html += displayBasicProperties(properties.basic);
+                    html += displayGameProperties(properties.game);
+                    break;
+                case 'logic':
+                    html += '<div class="property-section"><h4>Logic</h4>';
+                    html += '<div class="property">This feature is not supported yet.</div>';
+                    html += '</div>';
+                    break;
+                case 'physics':
+                    html += displayPhysicsProperties(properties.physics);
+                    break;
+                case 'materials':
+                    html += displayMaterials(properties.materials);
+                    break;
+                case 'misc':
+                    html += '<div class="property-section"><h4>Miscellaneous</h4>';
+                    html += '<div class="property">This feature is not supported yet.</div>';
+                    html += '</div>';
+                    break;
+            }
+
+            objectProperties.innerHTML = html;
+
+            // Restore the input for the property being edited
+            if (currentlyEditingProperty) {
+                const editingElement = objectProperties.querySelector(`[data-property="${currentlyEditingProperty}"]`);
+                if (editingElement) {
+                    const currentValue = editingElement.textContent;
+                    editingElement.innerHTML = `<input type="text" value='${currentValue}'>`;
+                    editingElement.classList.add('editing');
+                    const input = editingElement.querySelector('input');
+                    input.focus();
+                    input.selectionStart = input.selectionEnd = input.value.length;
+                }
+            }
+        }
+
+        function displayBasicProperties(basic) {
+            let html = '<div class="property-section"><h4>Basic Properties</h4>';
+            for (let [key, value] of Object.entries(basic)) {
                 html += `
-                <div class="property">
-                    <span>${key}:</span>
-                    <span style="float: right;"> 
-                        X: <span class="editable" data-property="${key}X">${value.x}</span>
-                        Y: <span class="editable" data-property="${key}Y">${value.y}</span>
-                        Z: <span class="editable" data-property="${key}Z">${value.z}</span>
-                    </span>
-                </div>`;
+        <div class="property">
+            <span>${key}:</span>
+            X: <span class="editable" data-property="${key}X">${currentlyEditingProperty === `${key}X` ? '' : value.x}</span>
+            Y: <span class="editable" data-property="${key}Y">${currentlyEditingProperty === `${key}Y` ? '' : value.y}</span>
+            Z: <span class="editable" data-property="${key}Z">${currentlyEditingProperty === `${key}Z` ? '' : value.z}</span>
+        </div>`;
             }
             html += '</div>';
-            
-            // Physics Properties
-            if (Object.keys(properties.physics).length > 0) {
-                html += '<div class="property-section"><h4>Physics Properties</h4>';
-                for (let [key, value] of Object.entries(properties.physics)) {
+            return html;
+        }
+
+        function displayPhysicsProperties(physics) {
+            let html = '<div class="property-section"><h4>Physics Properties</h4>';
+            if (physics.status === "Not applicable") {
+                html += '<div class="property">Physics properties are not applicable for this object type.</div>';
+            } else if (Object.keys(physics).length > 0) {
+                for (let [key, value] of Object.entries(physics)) {
                     if (typeof value === 'object' && value !== null) {
                         html += `
                         <div class="property">
                             <span>${key}:</span>
-                            <span style="float: right;">
-                                X: <span class="editable" data-property="${key}X">${value.x}</span>
-                                Y: <span class="editable" data-property="${key}Y">${value.y}</span>
-                                Z: <span class="editable" data-property="${key}Z">${value.z}</span>
-                            </span>
+                            X: <span class="editable" data-property="${key}X">${currentlyEditingProperty === `${key}X` ? '' : value.x}</span>
+                            Y: <span class="editable" data-property="${key}Y">${currentlyEditingProperty === `${key}Y` ? '' : value.y}</span>
+                            Z: <span class="editable" data-property="${key}Z">${currentlyEditingProperty === `${key}Z` ? '' : value.z}</span>
                         </div>`;
                     } else {
                         html += `
                         <div class="property">
                             <span>${key}:</span>
-                            <span style="float: right;" class="editable" data-property="${key}">${value}</span>
+                            <span class="editable" data-property="${key}">${currentlyEditingProperty === key ? '' : value}</span>
                         </div>`;
                     }
                 }
-                html += '</div>';
+            } else {
+                html += '<div class="property">No physics properties available for this object.</div>';
             }
-            
-            // Materials
-            if (properties.materials.length > 0) {
-                html += '<div class="property-section"><h4>Materials</h4>';
-                for (let material of properties.materials) {
-                    html += `<div class="property"><span>MATERIAL:</span>${material}</div>`;
+            html += '</div>';
+            return html;
+        }
+
+        function displayMaterials(materials) {
+            let html = '<div class="property-section"><h4>Materials</h4>';
+            if (materials.length > 0) {
+                if (materials[0] === "Not applicable") {
+                    html += '<div class="property">Materials are not applicable for this object type.</div>';
+                } else {
+                    for (let material of materials) {
+                        html += `<div class="property"><span>MATERIAL:</span>${material}</div>`;
+                    }
                 }
-                html += '</div>';
+            } else {
+                html += '<div class="property">No materials available for this object.</div>';
             }
-            
-            // Game Properties
-            if (Object.keys(properties.game).length > 0) {
-                html += '<div class="property-section"><h4>Game Properties</h4>';
-                for (let [key, value] of Object.entries(properties.game)) {
+            html += '</div>';
+            return html;
+        }
+
+        function displayGameProperties(game) {
+            let html = '<div class="property-section"><h4>Game Properties</h4>';
+            if (Object.keys(game).length > 0) {
+                for (let [key, value] of Object.entries(game)) {
                     if (typeof value === 'object' && value !== null) {
                         html += `
                         <div class="property">
                             <span>${key}:</span>
-                            <span style="float: right;">
-                            X: <span class="editable" data-property="${key}X">${value.x}</span>
-                            Y: <span class="editable" data-property="${key}Y">${value.y}</span>
-                            Z: <span class="editable" data-property="${key}Z">${value.z}</span>
-                            </span>
+                            X: <span class="editable" data-property="${key}X">${currentlyEditingProperty === `${key}X` ? '' : value.x}</span>
+                            Y: <span class="editable" data-property="${key}Y">${currentlyEditingProperty === `${key}Y` ? '' : value.y}</span>
+                            Z: <span class="editable" data-property="${key}Z">${currentlyEditingProperty === `${key}Z` ? '' : value.z}</span>
                         </div>`;
                     } else {
                         html += `
                         <div class="property">
                             <span>${key}:</span>
-                            <span style="float: right;" class="editable" data-property="${key}">${value}</span>
+                            <span class="editable" data-property="${key}">${currentlyEditingProperty === key ? '' : value}</span>
                         </div>`;
                     }
                 }
-                html += '</div>';
+            } else {
+                html += '<div class="property">No game properties available for this object.</div>';
             }
-            
-            objectProperties.innerHTML = html;
+            html += '</div>';
+            return html;
         }
 
         function makeEditable(element) {
@@ -419,23 +562,47 @@
             element.classList.add('editing');
             const input = element.querySelector('input');
             input.focus();
-            input.addEventListener('blur', () => saveEdit(element, property, input.value));
+
+            currentlyEditingProperty = property;
+
+            input.addEventListener('blur', () => {
+                saveEdit(element, property, input.value);
+                currentlyEditingProperty = null;
+            });
             input.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     saveEdit(element, property, input.value);
+                    currentlyEditingProperty = null;
                 }
             });
         }
 
         function saveEdit(element, property, newValue) {
-            socket.send(JSON.stringify({
+            let updateData = {
                 type: 'update_object_property',
                 object: selectedObject,
                 property: property,
-                value: JSON.parse(newValue)
-            }));
+                value: parseFloat(newValue) || newValue
+            };
+
+            // Handle compound properties (e.g., rotationX, rotationY, rotationZ)
+            if (property.endsWith('X') || property.endsWith('Y') || property.endsWith('Z')) {
+                const baseProperty = property.slice(0, -1);
+                const axis = property.slice(-1).toLowerCase();
+                updateData.property = baseProperty;
+                updateData.axis = axis;
+            }
+
+            socket.send(JSON.stringify(updateData));
             element.textContent = newValue;
             element.classList.remove('editing');
+            currentlyEditingProperty = null;
+
+            // Request updated properties after saving
+            socket.send(JSON.stringify({
+                type: 'get_object_properties',
+                name: selectedObject
+            }));
         }
 
         objectList.addEventListener('click', (e) => {
@@ -456,6 +623,21 @@
             }
         });
 
+        // Add this to your existing event listeners
+        document.getElementById('propertiesMenu').addEventListener('click', function (e) {
+            if (e.target.tagName === 'A') {
+                document.querySelectorAll('#propertiesMenu a').forEach(a => a.classList.remove('active'));
+                e.target.classList.add('active');
+                currentTab = e.target.getAttribute('data-tab');
+                if (selectedObject) {
+                    socket.send(JSON.stringify({
+                        type: 'get_object_properties',
+                        name: selectedObject
+                    }));
+                }
+            }
+        });
+
         // New functions for search, show/hide, and delete
         function searchObjects() {
             const searchTerm = document.getElementById('searchObject').value.toLowerCase();
@@ -466,25 +648,91 @@
             });
         }
 
-        function toggleVisibility() {
+        // function toggleVisibility() {
+        //     if (selectedObject) {
+        //         socket.send(JSON.stringify({
+        //             type: 'toggle_visibility',
+        //             object: selectedObject
+        //         }));
+        //     } else {
+        //         alert('Please select an object first');
+        //     }
+        // }
+
+        function deleteObject() {
             if (selectedObject) {
-                // Implement logic to show/hide the selected object in Blender
-                console.log(`Toggle visibility for ${selectedObject}`);
-                // You'll need to send a message to the WebSocket server to perform this action in Blender
+                if (confirm(`Are you sure you want to delete ${selectedObject}?`)) {
+                    socket.send(JSON.stringify({
+                        type: 'delete_object',
+                        object: selectedObject
+                    }));
+                }
             } else {
                 alert('Please select an object first');
             }
         }
 
-        function deleteObject() {
+        let gameIsPaused = false;
+
+        function updateGameInfo(info) {
+            document.getElementById('fpsValue').textContent = info.fps.toFixed(2);
+            // document.getElementById('profileValue').textContent = 'N/A'; // You'll need to implement profile info on the server side
+            document.getElementById('gameSpeed').value = info.game_speed;
+            document.getElementById('toggleMouse').classList.toggle('active', info.mouse_visible);
+        }
+        
+        function toggleVisibility() {
             if (selectedObject) {
-                // Implement logic to delete the selected object in Blender
-                console.log(`Delete object ${selectedObject}`);
-                // You'll need to send a message to the WebSocket server to perform this action in Blender
+                socket.send(JSON.stringify({
+                    type: 'toggle_visibility',
+                    object: selectedObject
+                }));
             } else {
                 alert('Please select an object first');
             }
         }
+
+        document.getElementById('pausePlay').addEventListener('click', function () {
+            gameIsPaused = !gameIsPaused;
+            socket.send(JSON.stringify({
+                type: 'set_game_speed',
+                speed: gameIsPaused ? 0 : 1
+            }));
+            this.textContent = gameIsPaused ? 'Play' : 'Pause';
+        });
+
+        document.getElementById('gameSpeed').addEventListener('change', function () {
+            socket.send(JSON.stringify({
+                type: 'set_game_speed',
+                speed: this.value
+            }));
+        });
+
+        document.getElementById('togglePhysicsDebug').addEventListener('click', function() {
+            alert('Physics debug visualization is not available in this version of UPBGE');
+        });
+
+        document.getElementById('toggleMouse').addEventListener('click', function () {
+            socket.send(JSON.stringify({
+                type: 'toggle_mouse'
+            }));
+        });
+
+        document.getElementById('restartGame').addEventListener('click', function () {
+            if (confirm('Are you sure you want to restart the game?')) {
+                socket.send(JSON.stringify({
+                    type: 'restart_game'
+                }));
+            }
+        });
+
+        document.getElementById('endGame').addEventListener('click', function () {
+            if (confirm('Are you sure you want to end the game?')) {
+                socket.send(JSON.stringify({
+                    type: 'end_game'
+                }));
+            }
+        });
 
         // Event listeners
         document.getElementById('searchObject').addEventListener('input', searchObjects);
@@ -503,6 +751,15 @@
         // Initial connection
         console.log("Starting initial connection");
         connectWebSocket();
+
+        // Function to request game info updates
+        function requestGameInfo() {
+            socket.send(JSON.stringify({ type: 'get_game_info' }));
+        }
+
+        // Request game info every second
+        setInterval(requestGameInfo, 1000);
+
     </script>
 </body>
 
